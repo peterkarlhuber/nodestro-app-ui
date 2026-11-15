@@ -103,6 +103,9 @@ test("the event parser splits a stream into events, across chunks", () => {
   parser.push("event: status\nid: 1\ndata: {\"a\"");
   parser.push(":1}\n\n: comment\n\nevent: text\ndata: line one\ndata: line two\r\n\r\ndata: plain\n\n");
   assert.deepEqual(events, [["status", "{\"a\":1}", "1"], ["text", "line one\nline two", "1"], ["message", "plain", "1"]]);
+  // An event that never ends is dropped instead of filling the memory.
+  parser.push("data: " + "x".repeat(3 * 1024 * 1024));
+  assert.equal(parser.buffer, "");
 });
 
 test("the standalone page switches the mode on and carries a strict policy with Trusted Types", () => {

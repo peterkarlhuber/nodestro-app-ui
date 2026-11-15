@@ -376,5 +376,7 @@
   "launcher.origins_not_found": "N’était pas autorisée : {origin}",
   "launcher.origins_invalid": "Adresse non valide : {reason}",
   "launcher.origins_switch_off": "L’accès depuis d’autres adresses est désactivé : il faut NODESTRO_CROSS_ORIGIN=on et NODESTRO_PAIRING=on.",
-  "launcher.devices_origin": "    appairé depuis {origin}"
+  "launcher.devices_origin": "    appairé depuis {origin}",
+  "backends.link_confirm": "Un lien d’appairage veut ajouter le backend {address}. Ajoutez-le seulement si vous connaissez cette adresse et attendiez ce lien ; n’importe qui peut envoyer un tel lien.",
+  "launcher.pair_ui_not_allowed": "Remarque : {origin} n’est pas encore autorisée (origins add) ou NODESTRO_CROSS_ORIGIN est désactivé ; le lien ne fonctionne qu’une fois les deux en place."
 }

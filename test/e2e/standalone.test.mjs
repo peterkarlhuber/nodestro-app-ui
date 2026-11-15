@@ -135,6 +135,12 @@ test("removing the device ends its access; the next visit pairs again", async ()
 test("a pairing link names the backend, fills the code and leaves the address", async () => {
   const link = `/?pair#backend=${encodeURIComponent(lab.url)}&code=${PAIR_CODE.slice(0, 4)}-${PAIR_CODE.slice(4)}&fp=${lab.fingerprint.replace(/:/g, "")}`;
   const { context, page, errors } = await open(link);
+  // A backend that is not in the list yet is never added by the link alone: the person confirms its address.
+  await page.waitForSelector("#backend-link:not([hidden])");
+  assert.ok((await page.textContent("#backend-link")).includes(lab.url));
+  assert.equal(await page.inputValue("#backend-address"), lab.url);
+  assert.equal(await page.evaluate(() => localStorage.getItem("nodestro.backends")), null);
+  await page.click("#backend-form button[type=submit]");
   await waitState(page, "auth_required");
   assert.equal(await page.inputValue("#pair-code"), `${PAIR_CODE.slice(0, 4)}-${PAIR_CODE.slice(4)}`);
   assert.ok(!page.url().includes(PAIR_CODE.slice(0, 4)) && !page.url().includes("backend="));
@@ -192,6 +198,11 @@ test("a second backend: switch between them, each with its own device", async ()
   await page.locator("#backend-list li").nth(0).getByText("Remove").click();
   await page.waitForFunction(() => document.querySelectorAll("#backend-list li").length === 1);
   assert.equal(office.devices().filter((device) => device.revoked).length, revoked + 1);
+  // A backend that is not the current one: its device is removed through its refresh cookie.
+  const labRevoked = lab.devices().filter((device) => device.revoked).length;
+  await page.locator("#backend-list li").nth(0).getByText("Remove").click();
+  await page.waitForFunction(() => document.querySelectorAll("#backend-list li").length === 0);
+  assert.equal(lab.devices().filter((device) => device.revoked).length, labRevoked + 1);
   assert.deepEqual(errors, []);
   await context.close();
 });

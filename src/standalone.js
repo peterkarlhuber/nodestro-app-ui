@@ -15,6 +15,8 @@
   const LOOPBACK = ["localhost", "127.0.0.1"];
   //: Renew the access token this long before it expires (milliseconds).
   const RENEW_EARLY = 60000;
+  //: The most an unfinished event may hold (a backend that never ends an event cannot fill the page's memory).
+  const MAX_EVENT = 1024 * 1024;
 
   /** A backend's address in canonical form (https://host[:port][/path], no trailing slash), or null.
       http:// only for loopback, as the backend allows it for origins. */
@@ -223,8 +225,10 @@
 
     push(chunk) {
       this.buffer += chunk;
+      if (this.buffer.length > MAX_EVENT * 2) this.buffer = "";
       const blocks = this.buffer.split(/\r?\n\r?\n/);
       this.buffer = blocks.pop();
+      if (this.buffer.length > MAX_EVENT) this.buffer = "";
       for (const block of blocks) {
         let type = "message";
         const data = [];

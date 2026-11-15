@@ -9,7 +9,9 @@
   Policy with Trusted Types. `src/standalone.js` keeps a list of backends in `localStorage` (name, address,
   fingerprint, never a secret), pairs with a code through `POST /api/app/token`, keeps the access token in memory
   only and renews it from the partitioned refresh cookie under a Web Lock, and reads run events through `fetch`.
-  The view "Backends" adds, renames, removes and switches backends; a pairing link of `pair --ui` names the backend.
+  The view "Backends" adds, renames, removes (revoking the device there, also through its refresh cookie) and
+  switches backends; a pairing link of `pair --ui` names the backend, and a backend not yet in the list is added only
+  after the person confirms its address. The event reader drops an event larger than 1 MiB.
   The fingerprint of a self-issued certificate is kept at the first pairing and compared from then on. Texts in six
   languages, including the launcher's `origins` messages.
 - The embedded interface's policy (and the stand-in backend's) gains `require-trusted-types-for 'script';

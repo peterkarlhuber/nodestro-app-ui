@@ -427,9 +427,12 @@
     state.pairing = { code, fingerprint: (params.get("fp") || "").replace(/[^0-9a-f]/gi, "").toUpperCase() };
     history.replaceState(null, "", location.pathname);
     if (standalone && params.get("backend")) {
-      // A link of the launcher (pair --ui): the backend joins the list and becomes the current one.
-      const added = backends.add("", params.get("backend"), "");
-      if (added) backends.choose(added.id);
+      // A link of the launcher (pair --ui). A backend already in the list becomes the current one; a new one is never
+      // added by a link alone (anyone can send a link): the person confirms its full address first.
+      const address = Standalone.normalizeAddress(params.get("backend"));
+      const known = address && backends.list().find((item) => item.address === address);
+      if (known) backends.choose(known.id);
+      else if (address) state.pairing.newBackend = address;
       else state.pairing.badBackend = true;
     }
   }
@@ -1799,6 +1802,17 @@
     $("pair-or-key").hidden = true;
     $("operator-hint").hidden = true;
     const current = backends.current();
+    if (state.pairing && state.pairing.newBackend) {
+      conn.set("disconnected");
+      showBackends();
+      $("backend-address").value = state.pairing.newBackend;
+      if (state.pairing.fingerprint) $("backend-fingerprint").value = state.pairing.fingerprint;
+      const confirm = $("backend-link");
+      confirm.textContent = t("backends.link_confirm", { address: state.pairing.newBackend });
+      confirm.hidden = false;
+      $("backend-address").focus();
+      return;
+    }
     if (!current) {
       conn.set("disconnected");
       showBackends(state.pairing && state.pairing.badBackend ? t("backends.address_invalid") : "");
@@ -1959,8 +1973,13 @@
         }),
         button("ghost small", t("backends.remove"), async () => {
           if (!window.confirm(t("backends.remove_confirm", { name: item.name }))) return;
-          // The device on that backend is removed as well, if this browser is connected to it now.
-          if (item.id === current && tokens && tokens.token) { try { await tokens.revoke(); } catch (problem) { /* gone */ } }
+          // The device on that backend is removed as well: with the current token, or with one from its refresh cookie.
+          const session = item.id === current && tokens ? tokens : new Standalone.TokenSession({ fetch: window.fetch.bind(window), base: item.address, locks: navigator.locks || null });
+          try {
+            if (!session.token) await session.refresh();
+            await session.revoke();
+          } catch (problem) { /* not paired there, or not reachable: nothing more to remove */ }
+          session.forget();
           backends.remove(item.id);
           if (item.id === current) { state.backend = null; state.config = null; if (tokens) tokens.forget(); }
           renderBackends();
@@ -1977,6 +1996,8 @@
     const error = $("backend-error");
     error.hidden = true;
     $("backend-open").hidden = true;
+    $("backend-link").hidden = true;
+    if (state.pairing) state.pairing.newBackend = null;
     const address = Standalone.normalizeAddress($("backend-address").value);
     if (!address) { error.textContent = t("backends.address_invalid"); error.hidden = false; return; }
     if (Standalone.normalizeFingerprint($("backend-fingerprint").value) === null) {

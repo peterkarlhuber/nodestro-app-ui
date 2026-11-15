@@ -21,8 +21,8 @@
     },
     {
       "path": "app.js",
-      "size": 84109,
-      "sha256": "613cdc5a6077a7f9673e7b8d095d263cfb0da1ddc6ee1be05708567e46a1d878"
+      "size": 85280,
+      "sha256": "2195bdd811e0880300cde4530ab8b0409b5d48cddb9f87894c6d5dba9982ef47"
     },
     {
       "path": "brand/nodestro-logo-on-dark.png",
@@ -46,38 +46,38 @@
     },
     {
       "path": "i18n/de.json",
-      "size": 27543,
-      "sha256": "ac1fd567a2626bc76ce89c7d79a2f439d3e2fd019557d8cefe37cb30c65c68d5"
+      "size": 27932,
+      "sha256": "654039e71bd5d4a9d24f1cbfece6bc0352067469b27e3c82451444a8f107f266"
     },
     {
       "path": "i18n/en.json",
-      "size": 25230,
-      "sha256": "4315e455a190d2501204dd429808b044f509afa7e30204e1ac273bc4b6c8cfbc"
+      "size": 25562,
+      "sha256": "0a7e1b6df4e672f4b8815de6e3ae64012959d1dc3d66db8f428cfe47133083ea"
     },
     {
       "path": "i18n/es.json",
-      "size": 27242,
-      "sha256": "cc869fd7cc254de94b1cb14023d4a13d7992e78bb6e4ddf8afd5d1519e0383e3"
+      "size": 27631,
+      "sha256": "357373bc79bd1492b3536275addf27184e4ca086369d6a5a6198c21f01832504"
     },
     {
       "path": "i18n/fr.json",
-      "size": 28550,
-      "sha256": "56d3ce8828c793d95ab7e0708a045fc08265e59fc90bf9e6d4116621a8238082"
+      "size": 28955,
+      "sha256": "d4243eceae4b8b27c3c3717ff3ca829a49486cca8f3c20ce294423292fa86780"
     },
     {
       "path": "i18n/it.json",
-      "size": 27583,
-      "sha256": "20b31e961ce87ed35dd6e3342ce6d3d1f8ec1a23a30deda248e12fa4aab5e289"
+      "size": 27970,
+      "sha256": "b9afb8608df191edfedd367e674524567c16d20d411ed17de14f3b943f8a1c3f"
     },
     {
       "path": "i18n/pt-BR.json",
-      "size": 26960,
-      "sha256": "dcf9063918fd3bf3697cd02f23ca6b8b1b8dfe59cb6b81e9719e0bedc6789a39"
+      "size": 27353,
+      "sha256": "ce8faefce82c885c5bf3241c45bd3ffa4233d3443b8e155231537bec645abd95"
     },
     {
       "path": "index.html",
-      "size": 16654,
-      "sha256": "b169d9b63d1e597f2a5518fe0fe0cb080019abe353919b066be4fc5501c67480"
+      "size": 16731,
+      "sha256": "7f2f357f89c94238ea9a099c57074e3ad0318df63a3d91aa1adc24d5e40ed41b"
     },
     {
       "path": "markdown.js",
@@ -86,8 +86,8 @@
     },
     {
       "path": "standalone.js",
-      "size": 12557,
-      "sha256": "3a3febf4c3107d5168542086a21c046bef51ede174a43fd340f70d400df3435a"
+      "size": 12826,
+      "sha256": "ad571588639b21eaa84aec56013e97e282348105dc5f88e389399376cfd82e90"
     }
   ]
 }

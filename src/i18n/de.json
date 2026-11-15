@@ -376,5 +376,7 @@
   "launcher.origins_not_found": "Ohnehin nicht erlaubt: {origin}",
   "launcher.origins_invalid": "Keine gültige Adresse: {reason}",
   "launcher.origins_switch_off": "Der Zugriff von anderen Adressen ist aus: Er braucht NODESTRO_CROSS_ORIGIN=on und NODESTRO_PAIRING=on.",
-  "launcher.devices_origin": "    gekoppelt von {origin}"
+  "launcher.devices_origin": "    gekoppelt von {origin}",
+  "backends.link_confirm": "Ein Kopplungslink möchte das Backend {address} hinzufügen. Füge es nur hinzu, wenn du diese Adresse kennst und den Link erwartet hast; jeder kann einen solchen Link schicken.",
+  "launcher.pair_ui_not_allowed": "Hinweis: {origin} ist noch nicht erlaubt (origins add) oder NODESTRO_CROSS_ORIGIN ist aus; der Link funktioniert erst, wenn beides gesetzt ist."
 }

@@ -376,5 +376,7 @@
   "launcher.origins_not_found": "Non era consentito: {origin}",
   "launcher.origins_invalid": "Indirizzo non valido: {reason}",
   "launcher.origins_switch_off": "L’accesso da altri indirizzi è disattivato: servono NODESTRO_CROSS_ORIGIN=on e NODESTRO_PAIRING=on.",
-  "launcher.devices_origin": "    abbinato da {origin}"
+  "launcher.devices_origin": "    abbinato da {origin}",
+  "backends.link_confirm": "Un link di abbinamento vuole aggiungere il backend {address}. Aggiungilo solo se conosci questo indirizzo e ti aspettavi il link; chiunque può inviare un link così.",
+  "launcher.pair_ui_not_allowed": "Nota: {origin} non è ancora consentito (origins add) oppure NODESTRO_CROSS_ORIGIN è disattivato; il link funziona solo quando entrambi sono impostati."
 }

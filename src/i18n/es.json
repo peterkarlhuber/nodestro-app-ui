@@ -376,5 +376,7 @@
   "launcher.origins_not_found": "No estaba permitida: {origin}",
   "launcher.origins_invalid": "No es una dirección válida: {reason}",
   "launcher.origins_switch_off": "El acceso desde otras direcciones está desactivado: necesita NODESTRO_CROSS_ORIGIN=on y NODESTRO_PAIRING=on.",
-  "launcher.devices_origin": "    emparejado desde {origin}"
+  "launcher.devices_origin": "    emparejado desde {origin}",
+  "backends.link_confirm": "Un enlace de emparejamiento quiere añadir el backend {address}. Añádelo solo si conoces esta dirección y esperabas el enlace; cualquiera puede enviar un enlace así.",
+  "launcher.pair_ui_not_allowed": "Nota: {origin} todavía no está permitida (origins add) o NODESTRO_CROSS_ORIGIN está desactivado; el enlace funciona solo cuando ambos estén listos."
 }
