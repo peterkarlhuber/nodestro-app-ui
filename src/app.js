@@ -1799,6 +1799,8 @@
     document.body.classList.add("standalone");
     $("nav-backends").hidden = false;
     $("signin-form").hidden = true;
+    // Set here, not in the page: the page names no address of any other site.
+    $("backend-address").placeholder = "https://server:8800";
     $("pair-or-key").hidden = true;
     $("operator-hint").hidden = true;
     const current = backends.current();

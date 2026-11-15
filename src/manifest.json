@@ -21,8 +21,8 @@
     },
     {
       "path": "app.js",
-      "size": 85280,
-      "sha256": "2195bdd811e0880300cde4530ab8b0409b5d48cddb9f87894c6d5dba9982ef47"
+      "size": 85421,
+      "sha256": "8fae490910f5f27c4c2ef5c516503a291161f742d9323af80cf232feaa15fa37"
     },
     {
       "path": "brand/nodestro-logo-on-dark.png",
@@ -76,8 +76,8 @@
     },
     {
       "path": "index.html",
-      "size": 16731,
-      "sha256": "7f2f357f89c94238ea9a099c57074e3ad0318df63a3d91aa1adc24d5e40ed41b"
+      "size": 16682,
+      "sha256": "375caf80c75b81a33f9eefaa4a52d36c9e69baa4d5f7b65f5fc3e918cb777416"
     },
     {
       "path": "markdown.js",
