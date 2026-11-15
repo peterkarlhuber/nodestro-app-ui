@@ -38,6 +38,10 @@ test("every state has transitions, and every target is a state", () => {
   for (const targets of Object.values(TRANSITIONS)) for (const target of targets) assert.ok(STATES.includes(target), target);
   // An incompatible backend is left only by a new attempt; "connected" is reached only through "connecting".
   assert.deepEqual(TRANSITIONS.incompatible, ["connecting"]);
+  // A stray 401 may arrive in any state but "incompatible": the sign-in must always be reachable.
+  for (const [from, targets] of Object.entries(TRANSITIONS)) {
+    if (from !== "incompatible") assert.ok(targets.includes("auth_required") || from === "auth_required", from);
+  }
   for (const [from, targets] of Object.entries(TRANSITIONS)) {
     if (from !== "connecting" && from !== "degraded") assert.ok(!targets.includes("connected"), from);
   }
@@ -114,5 +118,6 @@ test("fieldsFromForm maps form version 1 to the interface's names", () => {
   assert.equal(fields[2].max_size_mb, 20);
   assert.equal(fields[2].max_files, 3);
   assert.equal(fieldsFromForm(undefined), null);
+  assert.deepEqual(fieldsFromForm([null, 3, "x", { type: "text" }, { name: "" }]), []);
   assert.deepEqual(fieldsFromForm([]), []);
 });
