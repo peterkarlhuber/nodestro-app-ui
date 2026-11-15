@@ -11,6 +11,8 @@
 - Status line in the top bar and the dialog "About this app" (interface version, contract, backend name, ID and
   versions, app release); a banner when the connection is lost ("the run continues") with automatic retries
   (1 s growing to 30 s) and a retry button; a clear message for an incompatible backend. Six languages.
+- The launcher's messages for the commands of the folder model of portable packages (NAL-C3: `verify`, `backup`,
+  `restore`, `update`, `rollback`, `adopt`, `ui install|reset|status`), six languages.
 - `src/manifest.json`, the deterministic artifact `nodestro-app-ui-<version>.tgz` with its SHA-256, lint, unit and
   browser tests (axe), CI.
 
