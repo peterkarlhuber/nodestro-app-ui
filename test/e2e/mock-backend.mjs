@@ -87,6 +87,7 @@ export async function startMock({ tls = false } = {}) {
   const signedIn = (response, id) => {
     const device = devices.get(id);
     const secret = "secret" + Math.random().toString(36).slice(2);
+    if (device.secret) device.replaced.push(device.secret);
     device.secret = secret;
     const sessionId = "s" + (sessions.size + 1);
     sessions.add(sessionId);
@@ -140,13 +141,15 @@ export async function startMock({ tls = false } = {}) {
       if (!mock.pairing) return problem(response, 404, "pairing.disabled");
       if (String(sent.code || "").replace(/[-\s]/g, "").toUpperCase() !== PAIR_CODE) return problem(response, 400, "pairing.code_invalid");
       const id = "dev_" + (devices.size + 1).toString().padStart(16, "0");
-      devices.set(id, { name: sent.name || "Browser", revoked: false });
+      devices.set(id, { name: sent.name || "Browser", revoked: false, replaced: [] });
       return signedIn(response, id);
     }
     if (path === "/ui/api/device/session" && request.method === "POST") {
       await body(request);
       const [id, secret] = deviceCookie(request).split(".");
       const device = devices.get(id);
+      // As nodestro-api: a secret that was rotated away revokes the device (a stolen copy, or two tabs at once).
+      if (device && device.replaced.includes(secret)) device.revoked = true;
       if (!device || device.revoked || device.secret !== secret) return problem(response, 401, "pairing.device_revoked");
       return signedIn(response, id);
     }
@@ -205,6 +208,7 @@ export async function startMock({ tls = false } = {}) {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   mock.url = `${tls ? "https" : "http"}://127.0.0.1:${server.address().port}`;
   mock.revokeAll = () => { for (const device of devices.values()) device.revoked = true; };
+  mock.revoked = () => [...devices.values()].filter((device) => device.revoked).length;
   mock.finish = () => {
     mock.runStatus = "succeeded";
     for (const stream of streams) {

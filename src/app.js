@@ -366,6 +366,8 @@
   async function start() {
     setupTheme();
     loadManifest();
+    // First of all, so the code leaves the address even when the backend cannot be reached.
+    readPairingLink();
     conn.set("connecting");
     try {
       state.boot = await api("GET", "/ui/api/bootstrap");
@@ -383,7 +385,6 @@
     $("app-name").textContent = state.boot.name;
     $("app-version").textContent = state.boot.version ? "v" + state.boot.version : "";
     renderTlsNotice();
-    readPairingLink();
     if (!state.boot.session && !(await renewDevice())) { showSignIn(); return; }
     await enter();
   }
@@ -399,25 +400,34 @@
     history.replaceState(null, "", location.pathname);
   }
 
-  /** The fingerprint of the link is not the one the backend reports: someone may sit in between. */
+  /** The fingerprint of the link is not the one the backend reports (or it reports none): a wrong link or another
+   *  certificate. This does not stop an active man in the middle, who serves this script too: only the browser's
+   *  certificate dialog does (docs/pairing.md in nodestro-api). */
   function fingerprintMismatch() {
     const expected = state.pairing && state.pairing.fingerprint;
     const tls = (state.boot && state.boot.tls) || {};
-    if (!expected || !tls.fingerprint) return false;
-    return expected !== tls.fingerprint.replace(/:/g, "").toUpperCase();
+    if (!expected) return false;
+    return !tls.fingerprint || expected !== tls.fingerprint.replace(/:/g, "").toUpperCase();
   }
 
   /** A paired browser gets a new session from its device cookie (the backend restarted or the session ended). */
   async function renewDevice() {
     if (!state.boot || !state.boot.pairing || store.get("paired") !== "1") return false;
-    try {
-      const answer = await api("POST", "/ui/api/device/session", {});
-      state.boot.session = { scopes: answer.device.scopes, operator: false, name: answer.device.name, device: true };
-      return true;
-    } catch (problem) {
-      if (problem.status === 401) store.remove("paired");
-      return false;
-    }
+    // A replaced secret revokes the device, so tabs of this browser renew one after the other, and a tab that waited
+    // first looks for the session another tab already got (their cookies are shared).
+    const renew = async () => {
+      const boot = await api("GET", "/ui/api/bootstrap").catch(() => null);
+      if (boot && boot.session) { state.boot.session = boot.session; return true; }
+      try {
+        const answer = await api("POST", "/ui/api/device/session", {});
+        state.boot.session = { scopes: answer.device.scopes, operator: false, name: answer.device.name, device: true };
+        return true;
+      } catch (problem) {
+        if (problem.status === 401) store.remove("paired");
+        return false;
+      }
+    };
+    return navigator.locks ? navigator.locks.request("nodestro-device-renewal", renew) : renew();
   }
 
   function renderPairing() {

@@ -91,6 +91,31 @@ test("a fingerprint in the link that does not match blocks pairing", async () =>
   await context.close();
 });
 
+test("two tabs renewing at once keep the device", async () => {
+  const { context, page } = await open(mock);
+  await waitState(page, "auth_required");
+  await page.fill("#pair-code", PAIR_CODE);
+  await page.click("#pair-form button[type=submit]");
+  await waitState(page, "connected");
+  const revoked = mock.revoked();
+  await context.clearCookies({ name: "nodestro_ui" });
+  const other = await context.newPage();
+  await Promise.all([page.reload(), other.goto(mock.url + "/")]);
+  await Promise.all([waitState(page, "connected"), waitState(other, "connected")]);
+  assert.equal(mock.revoked(), revoked);
+  await context.close();
+});
+
+test("a link with a fingerprint is refused by a backend that reports none", async () => {
+  plain.pairing = true;
+  const { context, page } = await open(plain, `/?pair#code=${PAIR_CODE}&fp=${"AB".repeat(32)}`);
+  await waitState(page, "auth_required");
+  await page.waitForSelector("#pair-error:not([hidden])");
+  assert.ok(await page.isDisabled("#pair-form button[type=submit]"));
+  assert.ok(!page.url().includes(PAIR_CODE));
+  await context.close();
+});
+
 test("a wrong code is refused, and a revoked device must pair again", async () => {
   const { context, page } = await open(mock);
   await waitState(page, "auth_required");
