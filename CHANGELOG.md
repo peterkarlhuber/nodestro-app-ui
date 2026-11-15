@@ -16,6 +16,9 @@
 
 ### Changed
 
+- The sign-in is reachable from every state but `incompatible` (a stray `401` while disconnected), and malformed
+  form entries are skipped instead of stopping the interface (internal review).
+
 - Asset paths are relative (`ui/assets/...` instead of `/ui/assets/...`).
 - The first status request after a broken event stream tells a lost connection from a reconnecting stream; the
   browser's offline and online events are followed.
