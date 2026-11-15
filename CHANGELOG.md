@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- File fields showed accepted extensions with two dots (`..pdf`), in the file picker's filter and the drop zone's
+  title, because the contract already sends them with their dot.
+
 ### Added
 
 - The interface on its own origin (NAL-C5, behind `NODESTRO_CROSS_ORIGIN` in the backend, off by default):

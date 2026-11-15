@@ -32,6 +32,7 @@ export const DISCOVERY = {
 const FORM = [
   { name: "topic", type: "text", label: "Topic", help: "What the report is about", required: true, default: null, options: [], multiple: false, accept: [], accept_formats: [], max_mb: null, max_files: null },
   { name: "tone", type: "select", label: "Tone", help: "", required: false, default: "formal", options: ["formal", "casual"], multiple: false, accept: [], accept_formats: [], max_mb: null, max_files: null },
+  { name: "docs", type: "file", label: "Documents", help: "", required: false, default: null, options: [], multiple: true, accept: [".pdf", ".docx"], accept_formats: ["pdf", "docx"], max_mb: 20, max_files: 3 },
 ];
 //: What /ui/api/config says (a backend without the contract has only this; the label shows where a field came from).
 const CONFIG_FIELDS = [

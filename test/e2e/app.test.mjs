@@ -50,6 +50,9 @@ test("sign-in, the contract's form and the status line", async () => {
   assert.equal(await page.textContent("#status-text"), "Connected to Office server");
   // The form comes from GET /api/published/{slug} (form_version 1), not from /ui/api/config.
   assert.ok(await page.isVisible("#field-tone"));
+  // File extensions keep exactly one dot (the contract sends ".pdf").
+  assert.equal(await page.getAttribute("#field-docs", "accept"), ".pdf,.docx");
+  assert.equal(await page.getAttribute("#fields label.drop", "title"), ".pdf .docx");
   assert.ok(!(await page.textContent("#fields")).includes("(config)"));
   assert.ok(mock.requests.includes("GET /api/app") && mock.requests.includes("GET /api/published/report"));
   assert.deepEqual(errors, []);
