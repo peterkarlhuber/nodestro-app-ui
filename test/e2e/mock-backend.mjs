@@ -1,8 +1,11 @@
 // A stand-in backend for the browser tests: the interface's files and recorded answers of the app contract and of the
 // embedded interface's routes (/ui/api/...), with the same Content Security Policy as nodestro-api. Nothing runs a
 // workflow: a run finishes when the test says so.
-import { readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:http";
+import { createServer as createSecureServer } from "node:https";
+import { tmpdir } from "node:os";
 import { extname, join, normalize, sep } from "node:path";
 import { SRC } from "../../scripts/files.mjs";
 
@@ -14,6 +17,7 @@ export const CSP =
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".png": "image/png" };
 export const LANGUAGES = ["de", "en", "es", "fr", "it", "pt-BR"];
 export const KEY = "ndk_test_good";
+export const PAIR_CODE = "K7QDM2XA";
 export const OUTPUT = "# Report\n\nThis is **bold** and <script>window.injected = 1</script> plain text.\n\n- one\n- two";
 
 export const DISCOVERY = {
@@ -33,14 +37,35 @@ const CONFIG_FIELDS = [
   { name: "topic", label: "Topic (config)", type: "text", description: "", required: true, default: null, options: [], accept: [], multiple: false, max_files: null, max_size_mb: null },
 ];
 
-export async function startMock() {
+//: A self-issued certificate for the HTTPS mock (NAL-C4) and its SHA-256 fingerprint as the backend reports it.
+function selfSigned() {
+  const folder = mkdtempSync(join(tmpdir(), "nodestro-ui-tls-"));
+  try {
+    const key = join(folder, "key.pem"), cert = join(folder, "cert.pem");
+    execFileSync("openssl", ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "2",
+      "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1", "-keyout", key, "-out", cert], { stdio: "ignore" });
+    const fingerprint = execFileSync("openssl", ["x509", "-in", cert, "-noout", "-fingerprint", "-sha256"]).toString()
+      .trim().split("=")[1].toUpperCase();
+    return { key: readFileSync(key), cert: readFileSync(cert), fingerprint };
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+export async function startMock({ tls = false } = {}) {
   const mock = {
     mode: "contract", // "contract" | "legacy" | "incompatible" | "info-forbidden"
     runStatus: "running",
     runs: 0,
     requests: [],
+    pairing: false,
   };
+  const certificate = tls ? selfSigned() : null;
+  mock.fingerprint = certificate ? certificate.fingerprint : null;
   const sessions = new Set();
+  //: Paired devices: id -> {secret, revoked}; sessions of a device end when it is revoked.
+  const devices = new Map();
+  const deviceSessions = new Map();
   const streams = new Set();
 
   const json = (response, status, body, headers = {}) => {
@@ -50,7 +75,29 @@ export async function startMock() {
   const problem = (response, status, code, headers) => json(response, status, { error: { status, code, message: code } }, headers);
   const session = (request) => {
     const match = /(?:^|;\s*)nodestro_ui=([^;]+)/.exec(request.headers.cookie || "");
-    return match && sessions.has(match[1]) ? match[1] : null;
+    if (!match || !sessions.has(match[1])) return null;
+    const device = deviceSessions.get(match[1]);
+    return device && devices.get(device).revoked ? null : match[1];
+  };
+  const deviceCookie = (request) => {
+    const match = /(?:^|;\s*)nodestro_device=([^;]+)/.exec(request.headers.cookie || "");
+    return match ? match[1] : "";
+  };
+  const tlsInfo = () => (tls ? { mode: "self_signed", fingerprint: mock.fingerprint } : { mode: "none", fingerprint: null });
+  const signedIn = (response, id) => {
+    const device = devices.get(id);
+    const secret = "secret" + Math.random().toString(36).slice(2);
+    device.secret = secret;
+    const sessionId = "s" + (sessions.size + 1);
+    sessions.add(sessionId);
+    deviceSessions.set(sessionId, id);
+    const secure = tls ? "; Secure" : "";
+    return json(response, 200, { device: { id, name: device.name, scopes: ["run", "read"] }, operator: false }, {
+      "Set-Cookie": [
+        `nodestro_ui=${sessionId}; Path=/; HttpOnly; SameSite=Strict${secure}`,
+        `nodestro_device=${id}.${secret}; Path=/ui/api/device; HttpOnly; SameSite=Strict; Max-Age=7776000${secure}`,
+      ],
+    });
   };
   const body = (request) => new Promise((resolve) => {
     const parts = [];
@@ -63,7 +110,7 @@ export async function startMock() {
     approvals: [], usage: { total_tokens: 1234 },
   });
 
-  const server = createServer(async (request, response) => {
+  const handler = async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     const path = url.pathname;
     mock.requests.push(request.method + " " + path);
@@ -83,7 +130,32 @@ export async function startMock() {
       return response.end(readFileSync(target));
     }
     if (path === "/ui/api/bootstrap") {
-      return json(response, 200, { name: "Report writer", description: "Writes a short report.", version: 3, language: "en", languages: LANGUAGES, session: session(request) ? { scopes: ["run", "read"], operator: false, name: "Test key" } : null });
+      const current = session(request);
+      const device = current && deviceSessions.get(current);
+      const described = current ? { scopes: ["run", "read"], operator: false, name: device ? devices.get(device).name : "Test key", device: Boolean(device) } : null;
+      return json(response, 200, { name: "Report writer", description: "Writes a short report.", version: 3, language: "en", languages: LANGUAGES, session: described, pairing: mock.pairing, tls: tlsInfo() });
+    }
+    if (path === "/ui/api/pair" && request.method === "POST") {
+      const sent = JSON.parse((await body(request)).toString() || "{}");
+      if (!mock.pairing) return problem(response, 404, "pairing.disabled");
+      if (String(sent.code || "").replace(/[-\s]/g, "").toUpperCase() !== PAIR_CODE) return problem(response, 400, "pairing.code_invalid");
+      const id = "dev_" + (devices.size + 1).toString().padStart(16, "0");
+      devices.set(id, { name: sent.name || "Browser", revoked: false });
+      return signedIn(response, id);
+    }
+    if (path === "/ui/api/device/session" && request.method === "POST") {
+      await body(request);
+      const [id, secret] = deviceCookie(request).split(".");
+      const device = devices.get(id);
+      if (!device || device.revoked || device.secret !== secret) return problem(response, 401, "pairing.device_revoked");
+      return signedIn(response, id);
+    }
+    if (path === "/ui/api/device" && request.method === "DELETE") {
+      const current = session(request);
+      const id = current && deviceSessions.get(current);
+      if (!id) return problem(response, 403, "pairing.not_a_device");
+      devices.get(id).revoked = true;
+      return json(response, 200, { removed: true }, { "Set-Cookie": ["nodestro_ui=; Path=/; Max-Age=0", "nodestro_device=; Path=/ui/api/device; Max-Age=0"] });
     }
     if (path === "/ui/api/session" && request.method === "POST") {
       const sent = JSON.parse((await body(request)).toString() || "{}");
@@ -127,10 +199,12 @@ export async function startMock() {
       return;
     }
     return problem(response, 404, "not_found", contract);
-  });
+  };
+  const server = certificate ? createSecureServer({ key: certificate.key, cert: certificate.cert }, handler) : createServer(handler);
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  mock.url = `http://127.0.0.1:${server.address().port}`;
+  mock.url = `${tls ? "https" : "http"}://127.0.0.1:${server.address().port}`;
+  mock.revokeAll = () => { for (const device of devices.values()) device.revoked = true; };
   mock.finish = () => {
     mock.runStatus = "succeeded";
     for (const stream of streams) {

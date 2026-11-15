@@ -13,6 +13,11 @@
   (1 s growing to 30 s) and a retry button; a clear message for an incompatible backend. Six languages.
 - The launcher's messages for the commands of the folder model of portable packages (NAL-C3: `verify`, `backup`,
   `restore`, `update`, `rollback`, `adopt`, `ui install|reset|status`), six languages.
+- Pairing (NAL-C4, behind `NODESTRO_PAIRING` in the backend, off by default): a code form on the sign-in page, filled
+  from a pairing link (`/?pair#code=…&fp=…`, the code leaves the address at once), a block when the link's fingerprint
+  does not match the backend's, renewal of the session from the device cookie, "Remove this device" instead of
+  "Sign out" for a paired browser, and the permanent "restricted trust" notice with the SHA-256 fingerprint for a
+  self-issued certificate; "About this app" names the encryption. Six languages, browser tests over HTTPS.
 - `src/manifest.json`, the deterministic artifact `nodestro-app-ui-<version>.tgz` with its SHA-256, lint, unit and
   browser tests (axe), CI.
 
