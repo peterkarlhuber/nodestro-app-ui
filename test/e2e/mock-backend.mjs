@@ -7,13 +7,14 @@ import { createServer } from "node:http";
 import { createServer as createSecureServer } from "node:https";
 import { tmpdir } from "node:os";
 import { extname, join, normalize, sep } from "node:path";
+import { buildStandalone } from "../../scripts/build-standalone.mjs";
 import { SRC } from "../../scripts/files.mjs";
 
 //: nodestro_api.webui_server.CSP
 export const CSP =
   "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'; " +
   "connect-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; " +
-  "form-action 'self'; frame-ancestors 'none'";
+  "form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types 'none'";
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".png": "image/png" };
 export const LANGUAGES = ["de", "en", "es", "fr", "it", "pt-BR"];
 export const KEY = "ndk_test_good";
@@ -59,6 +60,10 @@ export async function startMock({ tls = false } = {}) {
     runs: 0,
     requests: [],
     pairing: false,
+    //: NAL-C5: the token profile and CORS for the interface on another origin, and the origins allowed.
+    crossOrigin: false,
+    allowedOrigins: [],
+    expiresIn: 900,
   };
   const certificate = tls ? selfSigned() : null;
   mock.fingerprint = certificate ? certificate.fingerprint : null;
@@ -67,9 +72,11 @@ export async function startMock({ tls = false } = {}) {
   const devices = new Map();
   const deviceSessions = new Map();
   const streams = new Set();
+  //: Access tokens (memory only, as nodestro-api): token -> device id.
+  const tokens = new Map();
 
   const json = (response, status, body, headers = {}) => {
-    response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers });
+    response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", ...(response.cors || {}), ...headers });
     response.end(JSON.stringify(body));
   };
   const problem = (response, status, code, headers) => json(response, status, { error: { status, code, message: code } }, headers);
@@ -82,6 +89,30 @@ export async function startMock({ tls = false } = {}) {
   const deviceCookie = (request) => {
     const match = /(?:^|;\s*)nodestro_device=([^;]+)/.exec(request.headers.cookie || "");
     return match ? match[1] : "";
+  };
+  const refreshCookie = (request) => {
+    const match = new RegExp(`(?:^|;\\s*)${refreshName()}=([^;]+)`).exec(request.headers.cookie || "");
+    return match ? match[1] : "";
+  };
+  const issued = (response, id) => {
+    const device = devices.get(id);
+    const secret = "secret" + Math.random().toString(36).slice(2);
+    if (device.secret) device.replaced.push(device.secret);
+    device.secret = secret;
+    const token = "nat_" + Math.random().toString(36).slice(2);
+    tokens.set(token, id);
+    const app = { slug: "report", name: "Report writer", description: "Writes a short report.", version: 3, fields: CONFIG_FIELDS, free_input: false, default_input: "", output_schema: null, approvals: false, max_upload_mb: 20, missing_resources: [], api_base: "/api/published/report", providers: [], output_dir: { enabled: false } };
+    return json(response, 200, { access_token: token, token_type: "Bearer", expires_in: mock.expiresIn, device: { id, name: device.name, scopes: ["run", "read"] }, app }, {
+      "Set-Cookie": `${refreshName()}=${id}.${secret}; Max-Age=7776000; Path=/api/app/token; HttpOnly; Secure; SameSite=None; Partitioned`,
+    });
+  };
+  //: As nodestro-api: the name carries the backend, since cookies do not tell ports apart.
+  const refreshName = () => "nodestro_refresh_" + server.address().port;
+  const tokenDevice = (request) => {
+    const match = /^Bearer (nat_\S+)$/.exec(request.headers.authorization || "");
+    const id = match && tokens.get(match[1]);
+    const device = id && devices.get(id);
+    return device && !device.revoked && device.origin === request.headers.origin ? id : null;
   };
   const tlsInfo = () => (tls ? { mode: "self_signed", fingerprint: mock.fingerprint } : { mode: "none", fingerprint: null });
   const signedIn = (response, id) => {
@@ -116,6 +147,42 @@ export async function startMock({ tls = false } = {}) {
     const path = url.pathname;
     mock.requests.push(request.method + " " + path);
     const contract = { "Nodestro-App-Contract": "1" };
+    // CORS as nodestro-api (docs/cross-origin.md): only allowed origins, only the app contract's paths.
+    const origin = request.headers.origin;
+    const kind = path === "/api/app/token" || path === "/api/app/token/refresh" ? "token" : path === "/api/app" ? "discovery" : path.startsWith("/api/published/report") ? "app" : null;
+    if (mock.crossOrigin && kind && origin && new URL(origin).host !== request.headers.host) {
+      if (!mock.allowedOrigins.includes(origin)) return problem(response, 403, "cors.origin_not_allowed");
+      response.cors = { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Expose-Headers": "Nodestro-App-Contract, Retry-After, Content-Disposition" };
+      if (kind === "token") response.cors["Access-Control-Allow-Credentials"] = "true";
+      if (request.method === "OPTIONS") {
+        response.writeHead(204, { ...response.cors, "Access-Control-Allow-Methods": "GET, POST, DELETE", "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Idempotency-Key, Last-Event-ID, X-Nodestro-App", "Access-Control-Max-Age": "600" });
+        return response.end();
+      }
+    }
+    if (kind === "token") {
+      if (!mock.crossOrigin) return problem(response, 404, "token.disabled");
+      if (request.headers["x-nodestro-app"] !== "1") return problem(response, 403, "token.header_required");
+      if (path === "/api/app/token" && request.method === "POST") {
+        const sent = JSON.parse((await body(request)).toString() || "{}");
+        if (String(sent.code || "").replace(/[-\s]/g, "").toUpperCase() !== PAIR_CODE) return problem(response, 400, "pairing.code_invalid");
+        const id = "dev_" + (devices.size + 1).toString().padStart(16, "0");
+        devices.set(id, { name: sent.name || "Browser", revoked: false, replaced: [], origin });
+        return issued(response, id);
+      }
+      if (path === "/api/app/token/refresh" && request.method === "POST") {
+        const [id, secret] = refreshCookie(request).split(".");
+        const device = devices.get(id);
+        if (device && device.replaced.includes(secret)) device.revoked = true;
+        if (!device || device.revoked || device.secret !== secret || device.origin !== origin) return problem(response, 401, "pairing.device_revoked", { "Set-Cookie": `${refreshName()}=; Max-Age=0; Path=/api/app/token; HttpOnly; Secure; SameSite=None; Partitioned` });
+        return issued(response, id);
+      }
+      if (path === "/api/app/token" && request.method === "DELETE") {
+        const id = tokenDevice(request);
+        if (!id) return problem(response, 401, "auth.invalid");
+        devices.get(id).revoked = true;
+        return json(response, 200, { removed: true }, { "Set-Cookie": `${refreshName()}=; Max-Age=0; Path=/api/app/token; HttpOnly; Secure; SameSite=None; Partitioned` });
+      }
+    }
     if (request.method !== "GET" && path.startsWith("/ui/api/") && request.headers["x-nodestro-ui"] !== "1") return problem(response, 403, "request.cross_site");
 
     if (request.method === "GET" && path === "/") {
@@ -174,10 +241,12 @@ export async function startMock({ tls = false } = {}) {
     if (path === "/api/app") {
       if (mock.mode === "legacy") return problem(response, 404, "not_found");
       const versions = mock.mode === "incompatible" ? [2] : [1];
-      const minimal = { contract: { name: "nodestro-app", versions, current: versions[0] }, backend: { id: DISCOVERY.backend.id, name: DISCOVERY.backend.name }, auth: DISCOVERY.auth, tls: DISCOVERY.tls };
-      return json(response, 200, session(request) ? { ...DISCOVERY, contract: minimal.contract } : minimal, contract);
+      const auth = { methods: [...DISCOVERY.auth.methods, ...(mock.pairing ? ["pairing"] : []), ...(mock.crossOrigin ? ["token"] : [])] };
+      const minimal = { contract: { name: "nodestro-app", versions, current: versions[0] }, backend: { id: DISCOVERY.backend.id, name: DISCOVERY.backend.name }, auth, tls: tls ? { enabled: true, ...tlsInfo() } : DISCOVERY.tls };
+      return json(response, 200, session(request) || tokenDevice(request) ? { ...DISCOVERY, contract: minimal.contract, auth, tls: minimal.tls } : minimal, contract);
     }
-    if (!session(request)) return problem(response, 401, "auth.required", path.startsWith("/api/") ? contract : {});
+    if (kind === "app" && origin && response.cors && !tokenDevice(request)) return problem(response, 401, "auth.token_required", contract);
+    if (!session(request) && !tokenDevice(request)) return problem(response, 401, "auth.required", path.startsWith("/api/") ? contract : {});
     if (path === "/ui/api/config") {
       return json(response, 200, { slug: "report", name: "Report writer", description: "Writes a short report.", version: 3, fields: CONFIG_FIELDS, free_input: false, default_input: "", output_schema: null, approvals: false, max_upload_mb: 20, missing_resources: [], api_base: "/api/published/report", providers: [], output_dir: { enabled: false } });
     }
@@ -195,7 +264,7 @@ export async function startMock({ tls = false } = {}) {
     if (path === "/api/published/report/runs/run_1") return json(response, 200, run(), contract);
     if (path === "/api/published/report/runs/run_1/result") return json(response, 200, { run_id: "run_1", status: mock.runStatus, output: OUTPUT, files: [] }, contract);
     if (path === "/api/published/report/runs/run_1/events") {
-      response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", ...contract });
+      response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", ...(response.cors || {}), ...contract });
       response.write("event: status\ndata: " + JSON.stringify(run()) + "\n\n");
       streams.add(response);
       request.on("close", () => streams.delete(response));
@@ -207,6 +276,9 @@ export async function startMock({ tls = false } = {}) {
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   mock.url = `${tls ? "https" : "http"}://127.0.0.1:${server.address().port}`;
+  //: A restart of the backend: every access token is gone (the refresh cookie stays valid).
+  mock.dropTokens = () => tokens.clear();
+  mock.devices = () => [...devices.values()];
   mock.revokeAll = () => { for (const device of devices.values()) device.revoked = true; };
   mock.revoked = () => [...devices.values()].filter((device) => device.revoked).length;
   mock.finish = () => {
@@ -220,4 +292,26 @@ export async function startMock({ tls = false } = {}) {
   };
   mock.close = () => new Promise((resolve) => { for (const stream of streams) stream.destroy(); server.closeAllConnections(); server.close(resolve); });
   return mock;
+}
+
+//: The standalone form of the interface (npm run build:standalone) on a static host of its own, as a site of its own
+//: (https://localhost:PORT, while the backends are https://127.0.0.1:PORT), with the headers the README asks for.
+export async function startStatic() {
+  const folder = mkdtempSync(join(tmpdir(), "nodestro-ui-static-"));
+  buildStandalone(folder);
+  const certificate = selfSigned();
+  const server = createSecureServer({ key: certificate.key, cert: certificate.cert }, (request, response) => {
+    const path = new URL(request.url, "https://localhost").pathname;
+    const relative = path === "/" ? "index.html" : normalize(decodeURIComponent(path.slice(1)));
+    const target = join(folder, relative);
+    if (relative.startsWith("..") || !target.startsWith(folder + sep) || !TYPES[extname(target)]) { response.writeHead(404); return response.end(); }
+    try { statSync(target); } catch { response.writeHead(404); return response.end(); }
+    response.writeHead(200, { "Content-Type": TYPES[extname(target)], "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "frame-ancestors 'none'", "Cache-Control": "no-store" });
+    response.end(readFileSync(target));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    url: `https://localhost:${server.address().port}`,
+    close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => { rmSync(folder, { recursive: true, force: true }); resolve(); }); }),
+  };
 }
