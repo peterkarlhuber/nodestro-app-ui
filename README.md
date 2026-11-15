@@ -19,6 +19,7 @@ embed it; `nodestro-api` serves it at `/` and `/ui/assets/`.
 |---|---|
 | `src/index.html`, `src/app.js`, `src/app.css` | The page, its logic and styles |
 | `src/connection.js` | `BackendConnection`: discovery, contract check, connection state, form mapping |
+| `src/standalone.js` | The interface on its own origin: list of backends, token session, event stream over fetch |
 | `src/markdown.js` | Markdown to DOM nodes (no HTML strings) |
 | `src/i18n/<lang>.json` | Texts in de, en, es, fr, it, pt-BR |
 | `src/brand/` | Logos (dark mode uses the white word mark, never a CSS invert) |
@@ -39,10 +40,34 @@ npm run manifest        # after changing anything in src/
 npx playwright install chromium
 npm run e2e             # browser tests (CHROMIUM_PATH=... to use an installed Chromium)
 npm run build           # dist/nodestro-app-ui-<version>.tgz, .sha256 and manifest.json
+npm run build:standalone # dist/standalone/: the interface for a static host of its own (NAL-C5)
 ```
 
 To try the interface by hand, start the stand-in backend from a Node prompt
 (`(await import("./test/e2e/mock-backend.mjs")).startMock()`) and sign in with the key `ndk_test_good`.
+
+## On a static host of its own (NAL-C5, preview)
+
+`npm run build:standalone` writes `dist/standalone/` (`index.html` and `ui/assets/`): the same files with
+`<meta name="nodestro-mode" content="standalone">` and a Content Security Policy in a meta element (`connect-src`
+only `https:` and `http://localhost`/`127.0.0.1`, Trusted Types). The interface then keeps a list of backends (name,
+address, fingerprint; never a key or token), pairs with a code and holds a 15-minute access token in memory only.
+The protocol and its threat model are in `docs/cross-origin.md` of nodestro-api. Each backend must switch it on
+(`NODESTRO_CROSS_ORIGIN=on` and `NODESTRO_PAIRING=on`, both off by default until the independent review D1) and allow
+the interface's origin (`start.sh origins add https://apps.example`).
+
+The static host must send the headers a meta element cannot set, for example:
+
+```
+Content-Security-Policy: frame-ancestors 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+Strict-Transport-Security: max-age=31536000
+```
+
+Browsers that block partitioned third-party cookies keep no refresh cookie: the interface then works while the page
+is open and asks for a new code afterwards. A backend with a self-issued certificate must be opened once in the same
+browser to accept its certificate (after comparing the fingerprint); the interface links to it.
 
 ## Versions
 

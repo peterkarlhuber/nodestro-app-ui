@@ -4,6 +4,16 @@
 
 ### Added
 
+- The interface on its own origin (NAL-C5, behind `NODESTRO_CROSS_ORIGIN` in the backend, off by default):
+  `npm run build:standalone` writes a form for a static host with the standalone mode and a meta Content Security
+  Policy with Trusted Types. `src/standalone.js` keeps a list of backends in `localStorage` (name, address,
+  fingerprint, never a secret), pairs with a code through `POST /api/app/token`, keeps the access token in memory
+  only and renews it from the partitioned refresh cookie under a Web Lock, and reads run events through `fetch`.
+  The view "Backends" adds, renames, removes and switches backends; a pairing link of `pair --ui` names the backend.
+  The fingerprint of a self-issued certificate is kept at the first pairing and compared from then on. Texts in six
+  languages, including the launcher's `origins` messages.
+- The embedded interface's policy (and the stand-in backend's) gains `require-trusted-types-for 'script';
+  trusted-types 'none'`: the interface writes no HTML from strings.
 - The interface moved here from `nodestro-api` (NAL-C2, files of `e8c84c4`, see `PROVENANCE.md`).
 - `src/connection.js` (`BackendConnection`): discovery with `GET /api/app`, contract version check (`nodestro-app/1`),
   the connection states `disconnected`, `connecting`, `auth_required`, `connected`, `degraded`, `error`,
